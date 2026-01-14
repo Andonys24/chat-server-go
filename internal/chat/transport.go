@@ -33,6 +33,24 @@ func (t *Transport) Send(header, content string) error {
 	return t.Writer.Flush()
 }
 
+func (t *Transport) Receive() (string, string, error) {
+	line, err := t.Reader.ReadString('\n')
+
+	if err != nil {
+		return "", "", err
+	}
+
+	parts := strings.SplitN(strings.TrimSpace(line), "|", 2)
+	header := parts[0]
+	content := ""
+
+	if len(parts) > 1 {
+		content = parts[1]
+	}
+
+	return header, content, nil
+}
+
 func (t *Transport) Close() error {
 	return t.Conn.Close()
 }

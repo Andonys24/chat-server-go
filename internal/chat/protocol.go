@@ -15,3 +15,10 @@ const (
 	RespMsgFrom    = "OF"
 	RespInfo       = "INFO"
 )
+
+const (
+	InfoTypeEnter   = "ENTER"   // Alguien se unió
+	InfoTypeExit    = "EXIT"    // Alguien se fue
+	InfoTypeError   = "ERROR"   // Un error general
+	InfoTypeSuccess = "SUCCESS" // Una acción completada
+)
