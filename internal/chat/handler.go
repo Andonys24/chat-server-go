@@ -1,7 +1,7 @@
 package chat
 
 import (
-	"fmt"
+	"log"
 	"net"
 	"strings"
 )
@@ -82,7 +82,7 @@ func HandlerConnection(conn net.Conn, hub *Hub) {
 		case CmdCLeanConsole:
 			transport.Send(RespOkClean, "Capa de consola limpia")
 		default:
-			fmt.Println("Comando no reconocido:", header)
+			log.Printf("[ADVERTENCIA] Cliente [%s] envió comando desconocido: %s", currentNickname, header)
 		}
 	}
 }

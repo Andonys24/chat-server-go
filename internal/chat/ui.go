@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-func CleanConsole() {
+func CleanConsole() error {
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
 		// /c ejecuta el comando y luego termina
@@ -18,12 +18,14 @@ func CleanConsole() {
 	}
 
 	cmd.Stdout = os.Stdout
-	_ = cmd.Run()
+	return cmd.Run()
 }
 
 func GenerateTitle(title string, clean bool) {
 	if clean {
-		CleanConsole()
+		if err := CleanConsole(); err != nil {
+			fmt.Println("Error al limpiar la consola")
+		}
 	}
 
 	asterick := strings.Repeat("*", len(title)*3)

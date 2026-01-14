@@ -9,49 +9,64 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 )
 
 func main() {
+	// Carga de configuración
 	cfg := config.LoadConfig()
 	addres := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 
+	// Título visual
 	chat.GenerateTitle("Chat Server in Go", true)
 
-	listener, err := net.Listen("tcp", addres)
-
-	if err != nil {
-		log.Fatalf("Error al iniciar el servidor: %v", err)
-	}
-
-	defer listener.Close()
-
-	fmt.Printf("Servidor Corriendo en %s\n", addres)
-
-	// Incializar el manejador de usuarios
+	// Inicializar el Hub (Cerebro)
 	hub := chat.NewHub(cfg.MaxConnections)
 	go hub.Run()
 
-	// Go routine para monitorear la consola (Input 'exit')
+	// Iniciar el servidor TCP en una Goroutine secundaria
 	go func() {
-		scanner := bufio.NewScanner(os.Stdin)
-		fmt.Println("Ingrese 'exit' para apagar el servidor.")
-		for scanner.Scan() {
-			if strings.ToLower(strings.TrimSpace(scanner.Text())) == "exit" {
-				fmt.Println("Cerrando el servidor...")
-				os.Exit(0) // En Go, os.Exit(0) cierra de forma segura
+		listener, err := net.Listen("tcp", addres)
+		if err != nil {
+			log.Fatalf("[ERROR] No se pudo iniciar el servidor: %v", err)
+		}
+		defer listener.Close()
+
+		log.Printf("[SISTEMA] Servidor iniciado y escuchando en %s", addres)
+
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				log.Printf("[ERROR] Fallo al aceptar conexión entrante: %v", err)
+				continue
 			}
+			// Cada cliente en su propia habitación (Goroutine)
+			go chat.HandlerConnection(conn, hub)
 		}
 	}()
 
-	// Bucle principal de aceptacion de clientes
+	// Bucle de comandos del Administrador (Hilo Principal)
+	fmt.Println("Ingrese 'exit' para apagar el servidor.")
+
+	time.Sleep(100 * time.Millisecond)
+
+	scanner := bufio.NewScanner(os.Stdin)
 	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			log.Printf("Error aceptando la conexion: %v", err)
-			continue
+		fmt.Print("\rADMIN > ")
+		if scanner.Scan() {
+			text := strings.ToUpper(strings.TrimSpace(scanner.Text()))
+
+			if text == "" {
+				continue
+			}
+
+			if text == chat.CmdExit {
+				log.Println("[SISTEMA] Apagando el servidor por comando administrativo...")
+				os.Exit(0)
+			}
+
+			// Si el comando no es EXIT, podrías añadir otros aquí
+			log.Printf("[ADVERTENCIA] Comando administrativo no reconocido: %s", text)
 		}
-
-		go chat.HandlerConnection(conn, hub)
-
 	}
 }

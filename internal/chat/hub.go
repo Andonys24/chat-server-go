@@ -2,6 +2,7 @@ package chat
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"strings"
 )
@@ -51,7 +52,7 @@ func NewHub(maxConn int) *Hub {
 }
 
 func (h *Hub) Run() {
-	fmt.Println("Hub de usuarios iniciado...")
+	log.Println("[SISTEMA] Hub de usuarios iniciado...")
 	for {
 		select {
 		case req := <-h.Register:
@@ -92,10 +93,10 @@ func (h *Hub) handleAddUser(req *RegisterRequest) {
 
 	// Respuesta de exito
 	req.Transport.Send(RespOkEnter, "Bienvenido "+req.Nickname)
-	fmt.Printf("Hub: Usuario [%s] conectado. Total: %d\n", req.Nickname, len(h.Clients))
+	log.Printf("[CONEXIÓN] Usuario [%s] entró. Total: %d", req.Nickname, len(h.Clients))
 
 	// Notificar a otros
-	h.broadcastInfo(InfoTypeEnter, req.Nickname, newUser)
+	h.broadcastInfo(CmdEnter, req.Nickname, newUser)
 }
 
 func (h *Hub) broadcastInfo(infoType, message string, exclude *User) {
@@ -149,10 +150,10 @@ func (h *Hub) handleRemoveUser(conn net.Conn) {
 		// Cerrar la conexion fisicamente
 		conn.Close()
 
-		fmt.Printf("Hub: Usuario [%s] desconectado. Total: %d\n", nicknameToRemove, len(h.Clients))
+		log.Printf("[DESCONEXIÓN] Usuario [%s] salió. Total: %d", nicknameToRemove, len(h.Clients))
 
 		// Notificar a los demas INFO|EXIT|Nombre
-		h.broadcastInfo(InfoTypeExit, nicknameToRemove, nil)
+		h.broadcastInfo(CmdExit, nicknameToRemove, nil)
 	}
 
 	conn.Close()
