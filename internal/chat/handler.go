@@ -3,6 +3,7 @@ package chat
 import (
 	"fmt"
 	"net"
+	"strings"
 )
 
 func HandlerConnection(conn net.Conn, hub *Hub) {
@@ -41,7 +42,6 @@ func HandlerConnection(conn net.Conn, hub *Hub) {
 		header, content, err = transport.Receive()
 		if err != nil {
 			// Si el cliente cierra la terminal o falla la red
-			hub.Unregister <- conn
 			return
 		}
 
@@ -54,32 +54,35 @@ func HandlerConnection(conn net.Conn, hub *Hub) {
 				From:    currentNickname,
 				Content: content,
 			}
+		case CmdUsers:
+			// Crear canal solo para estas respuestas
+			responseChan := make(chan string)
+
+			// Pasar hub al canal
+			hub.UserListRequest <- responseChan
+
+			// Esperar respuesta (bloqueo momentaneo seguro)
+			userList := <-responseChan
+
+			// Enviar respuesta al cliente
+			transport.Send(RespInfo, "USERS|"+userList)
+		case CmdMessage:
+			// El 'content' viene como "Destinatario|Mensaje"
+			parts := strings.SplitN(content, "|", 2)
+			if len(parts) < 2 {
+				transport.Send(RespInfo, InfoTypeError+"|Formato incorrecto. Usa: MESSAGE|usuario|mensaje")
+				continue
+			}
+
+			hub.PrivateMsg <- &PrivateMessageRequest{
+				From:    currentNickname,
+				To:      parts[0],
+				Content: parts[1],
+			}
+		case CmdCLeanConsole:
+			transport.Send(RespOkClean, "Capa de consola limpia")
+		default:
+			fmt.Println("Comando no reconocido:", header)
 		}
 	}
-}
-
-func (h *Hub) handleRemoveUser(conn net.Conn) {
-	var nicknameToRemove string
-
-	for name, user := range h.Clients {
-		if user.Conn == conn {
-			nicknameToRemove = name
-			break
-		}
-	}
-
-	if nicknameToRemove != "" {
-		// Eliminar del mapa
-		delete(h.Clients, nicknameToRemove)
-
-		// Cerrar la conexion fisicamente
-		conn.Close()
-
-		fmt.Printf("Hub: Usuario [%s] desconectado. Total: %d\n", nicknameToRemove, len(h.Clients))
-
-		// Notificar a los demas INFO|EXIT|Nombre
-		h.broadcastInfo(InfoTypeExit, nicknameToRemove, nil)
-	}
-
-	conn.Close()
 }

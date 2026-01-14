@@ -3,6 +3,7 @@ package chat
 import (
 	"fmt"
 	"net"
+	"strings"
 )
 
 type Hub struct {
@@ -12,9 +13,11 @@ type Hub struct {
 	MaxConnections int
 
 	// Canales para comunicacion segura
-	Register   chan *RegisterRequest
-	Unregister chan net.Conn // Usar el ID para desconectar
-	Broadcast  chan *MessageRequest
+	Register        chan *RegisterRequest
+	Unregister      chan net.Conn // Usar el ID para desconectar
+	Broadcast       chan *MessageRequest
+	UserListRequest chan chan string            // Un canal que recibe canles de strings
+	PrivateMsg      chan *PrivateMessageRequest // Canal para procesar peticiones privadas
 }
 
 // Estructura auxiliar para pedir registro
@@ -29,13 +32,21 @@ type MessageRequest struct {
 	Content string
 }
 
+type PrivateMessageRequest struct {
+	From    string
+	To      string
+	Content string
+}
+
 func NewHub(maxConn int) *Hub {
 	return &Hub{
-		Clients:        make(map[string]*User),
-		MaxConnections: maxConn,
-		Register:       make(chan *RegisterRequest),
-		Unregister:     make(chan net.Conn),
-		Broadcast:      make(chan *MessageRequest),
+		Clients:         make(map[string]*User),
+		MaxConnections:  maxConn,
+		Register:        make(chan *RegisterRequest),
+		Unregister:      make(chan net.Conn),
+		Broadcast:       make(chan *MessageRequest),
+		UserListRequest: make(chan chan string),
+		PrivateMsg:      make(chan *PrivateMessageRequest),
 	}
 }
 
@@ -49,6 +60,13 @@ func (h *Hub) Run() {
 			h.handleRemoveUser(conn)
 		case msg := <-h.Broadcast:
 			h.handleBroadcastMessage(msg)
+		case responseChan := <-h.UserListRequest:
+			// El Hub genera la lista de forma segura porque está en su propio hilo
+			list := h.generateUserList()
+			// Envía la respuesta al canal que el Handler le pasó
+			responseChan <- list
+		case pMsg := <-h.PrivateMsg:
+			h.handlePrivateMessage(pMsg)
 		}
 	}
 }
@@ -94,4 +112,61 @@ func (h *Hub) handleBroadcastMessage(msg *MessageRequest) {
 			user.Transport.Send(RespMsgFrom, msg.From+"|"+msg.Content)
 		}
 	}
+}
+
+func (h *Hub) handlePrivateMessage(req *PrivateMessageRequest) {
+	targetUser, exists := h.Clients[req.To]
+	sender, senderExists := h.Clients[req.From]
+
+	if !exists {
+		if senderExists {
+			sender.Transport.Send(RespInfo, InfoTypeError+"|Usuario '"+req.To+"' no encontrado")
+		}
+		return
+	}
+
+	// Enviar mensaje al destinatario usando el formato OF|Remitente|Mensaje
+	targetUser.Transport.Send(RespMsgFrom, req.From+"|"+req.Content)
+
+	// Confirmar al remitente que se envió con éxito (INFO|SUCCESS|...)
+	sender.Transport.Send(RespInfo, InfoTypeSuccess+"|Mensaje privado enviado a "+req.To)
+}
+
+func (h *Hub) handleRemoveUser(conn net.Conn) {
+	var nicknameToRemove string
+
+	for name, user := range h.Clients {
+		if user.Conn == conn {
+			nicknameToRemove = name
+			break
+		}
+	}
+
+	if nicknameToRemove != "" {
+		// Eliminar del mapa
+		delete(h.Clients, nicknameToRemove)
+
+		// Cerrar la conexion fisicamente
+		conn.Close()
+
+		fmt.Printf("Hub: Usuario [%s] desconectado. Total: %d\n", nicknameToRemove, len(h.Clients))
+
+		// Notificar a los demas INFO|EXIT|Nombre
+		h.broadcastInfo(InfoTypeExit, nicknameToRemove, nil)
+	}
+
+	conn.Close()
+}
+
+// Funcion auxiliar para generar string
+func (h *Hub) generateUserList() string {
+	if len(h.Clients) == 0 {
+		return "0"
+	}
+
+	var names []string
+	for name := range h.Clients {
+		names = append(names, name)
+	}
+	return fmt.Sprintf("%d %s", len(h.Clients), strings.Join(names, " "))
 }

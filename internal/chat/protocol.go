@@ -14,6 +14,7 @@ const (
 	RespErrorEnter = "ERROR ENTER"
 	RespMsgFrom    = "OF"
 	RespInfo       = "INFO"
+	RespOkClean    = "OK CLEAN"
 )
 
 const (
