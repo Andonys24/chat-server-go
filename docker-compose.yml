@@ -1,0 +1,33 @@
+services:
+  chat-server:
+    container_name: go-chat-server
+    build:
+      context: .
+      dockerfile: server.Dockerfile
+    # cargar el archivo .env al servidor
+    env_file:
+      - .env
+    ports:
+      - "${PORT}:${PORT}" # Mapea puerto del PC al puerto del Contenedor
+    networks:
+      - chat-net
+
+  chat-client:
+    container_name: go-chat-client
+    build:
+      context: .
+      dockerfile: client.Dockerfile
+    # IMPORTANTE: El cliente debe apuntar al nombre del servicio 'chat-server'
+    environment:
+      - HOST=chat-server
+      - PORT=${PORT}
+    depends_on:
+      - chat-server
+    stdin_open: true # Importante para poder escribir en consola
+    tty: true # importante para los colores ANSI
+    networks:
+      - chat-net
+
+networks:
+  chat-net:
+    driver: bridge

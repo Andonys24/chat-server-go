@@ -41,7 +41,9 @@ go mod download
 
 ## 🎮 Uso
 
-### Iniciar el Servidor
+### Opción 1: Ejecución Local (Con Go)
+
+#### Iniciar el Servidor
 
 ```sh
 go run cmd/server/main.go
@@ -56,7 +58,7 @@ ADMIN >
 
 Para detener el servidor, escribe `exit` en el prompt administrativo.
 
-### Conectar un Cliente
+#### Conectar un Cliente
 
 ```sh
 go run cmd/client/main.go
@@ -64,15 +66,53 @@ go run cmd/client/main.go
 
 Al conectar, se te pedirá ingresar un nickname (3-12 caracteres, debe empezar con letra).
 
+---
+
+### Opción 2: Ejecución con Docker Compose (Recomendado)
+
+#### Requisitos
+- Docker y Docker Compose instalados
+
+#### Pasos para ejecutar
+
+1. **Compilar la imagen del servidor y ejecutarlo en segundo plano:**
+```sh
+docker-compose up --build -d chat-server
+```
+
+2. **Ejecutar el cliente (en una nueva terminal):**
+```sh
+docker-compose run chat-client
+```
+
+#### Explicación del flujo
+
+- `--build`: Construye las imágenes de Docker antes de ejecutar
+- `-d`: Ejecuta el servidor en modo *detached* (segundo plano)
+- `chat-server`: Nombre del servicio que queremos ejecutar
+- `docker-compose run`: Ejecuta un contenedor de un servicio sin iniciar el resto
+
+#### Detener los servicios
+
+```sh
+docker-compose down
+```
+
+#### Ver logs del servidor
+
+```sh
+docker-compose logs -f chat-server
+```
+
 ## 📡 Comandos del Cliente
 
 | Comando | Descripción | Formato |
 |---------|-------------|---------|
-| `/all <mensaje>` | Envía mensaje a todos los usuarios | `/all Hola a todos` |
-| `/msg <usuario> <mensaje>` | Envía mensaje privado | `/msg juan Hola Juan` |
-| `/users` | Lista usuarios conectados | `/users` |
-| `/clear` | Limpia la consola | `/clear` |
-| `/exit` | Desconecta del servidor | `/exit` |
+| `/all <mensaje>` | Envía mensaje a todos los usuarios | `ALL|Hola a todos` |
+| `/msg <usuario> <mensaje>` | Envía mensaje privado | `MESSAG|Juan|Hola Juan` |
+| `/users` | Lista usuarios conectados | `USERS|` |
+| `/clear` | Limpia la consola | `CLEAR CONSOLE|` |
+| `/exit` | Desconecta del servidor | `EXIT|` |
 
 ## 🏗️ Arquitectura
 
@@ -169,7 +209,36 @@ La configuración se carga desde [internal/config/config.go](internal/config/con
 - Caracteres permitidos: Alfanuméricos
 - Validación vía expresión regular
 
-## 🔄 Flujo de Conexión
+## � Docker
+
+El proyecto incluye soporte completo para Docker con multi-stage builds para optimizar el tamaño de las imágenes.
+
+### Arquitectura Docker
+
+- **server.Dockerfile**: Construye imagen ligera del servidor (Alpine Linux)
+- **client.Dockerfile**: Construye imagen del cliente con soporte para entrada interactiva
+- **docker-compose.yml**: Orquesta servidor y cliente en una red privada (`chat-net`)
+
+### Configuración
+
+El archivo [`.env`](.env) contiene las variables de entorno:
+
+```env
+HOST=0.0.0.0           # El servidor escucha en todas las interfaces
+PORT=8080              # Puerto TCP
+MAX_CONNECTIONS=100    # Máximo de conexiones simultáneas
+```
+
+En Docker Compose, el cliente se conecta automáticamente al servidor usando el nombre de servicio `chat-server` como hostname.
+
+### Ventajas de Docker
+
+- ✅ **Reproducibilidad**: Mismo comportamiento en cualquier máquina
+- ✅ **Aislamiento**: Red privada entre servidor y cliente
+- ✅ **Multi-stage builds**: Imágenes finales ligeras (~15MB servidor)
+- ✅ **Facilidad de prueba**: Solo dos comandos para probar
+
+## �🔄 Flujo de Conexión
 
 1. Cliente se conecta al servidor
 2. Servidor solicita nickname
